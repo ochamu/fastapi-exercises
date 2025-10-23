@@ -62,3 +62,28 @@ def create_user_item(db: Session, item: schemas.ItemCreate, user_id: int):
     db.commit()
     db.refresh(db_item)
     return db_item
+
+
+def deactivate_user_and_transfer_items(db: Session, user_id: int):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if user is None:
+        return {"status": "not_found", "user": None}
+    if not user.is_active:
+        return {"status": "already_inactive", "user": user}
+
+    next_owner = (
+        db.query(models.User)
+        .filter(models.User.is_active.is_(True), models.User.id != user_id)
+        .order_by(models.User.id.asc())
+        .first()
+    )
+    if next_owner is None:
+        return {"status": "no_active_successor", "user": user}
+
+    for item in list(user.items):
+        item.owner = next_owner
+
+    user.is_active = False
+    db.commit()
+    db.refresh(user)
+    return {"status": "deactivated", "user": user}

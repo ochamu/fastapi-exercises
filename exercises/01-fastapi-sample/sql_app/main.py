@@ -76,6 +76,27 @@ def read_user(
     return db_user
 
 
+@app.delete("/users/{user_id}", response_model=schemas.User)
+def delete_user(
+    user_id: int,
+    db: Session = db_session,
+    current_user=Depends(get_current_user),
+):
+    result = crud.deactivate_user_and_transfer_items(db, user_id=user_id)
+    status = result["status"]
+    db_user = result["user"]
+    if status == "not_found":
+        raise HTTPException(status_code=404, detail="User not found")
+    if status == "already_inactive":
+        raise HTTPException(status_code=400, detail="User already inactive")
+    if status == "no_active_successor":
+        raise HTTPException(
+            status_code=400, detail="Cannot delete the only active user"
+        )
+    db_user.api_token = None
+    return db_user
+
+
 @app.post("/users/{user_id}/items/", response_model=schemas.Item)
 def create_item_for_user(
     user_id: int,
